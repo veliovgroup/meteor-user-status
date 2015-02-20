@@ -2,22 +2,18 @@
 @description Check login methodName and store connection data into user's profile
 ###
 Accounts.validateLoginAttempt (attempt) ->
-  allowed = [
-    'login'
-    'resetPassword'
-  ]
+  
+  if !attempt.error and attempt.user
+    Meteor.users.update
+      _id: attempt.user._id
+    ,
+      '$set':
+        connection: attempt.connection.id
+        'profile.online': true
+        'profile.idle': false
+        'profile.location.ip': attempt.connection.clientAddress
 
-  if allowed.inArray attempt.methodName
-    if !attempt.error and attempt.user
-      Meteor.users.update
-        _id: attempt.user._id
-      ,
-        '$set':
-          connection: attempt.connection.id
-          'profile.online': true
-          'profile.location.ip': attempt.connection.clientAddress
-
-  return if !attempt.error and allowed.inArray(attempt.methodName) then true else false
+  return if !attempt.error and attempt.user then true else false
 
 
 ###
@@ -31,6 +27,7 @@ Meteor.onConnection (connection) ->
     ,
       '$set':
         'profile.online': false
+        'profile.idle': false
 
 
 ###
@@ -48,3 +45,4 @@ Meteor.methods
         ,
           '$set':
             'profile.online': status
+            'profile.idle': false
