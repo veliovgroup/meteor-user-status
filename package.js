@@ -1,6 +1,6 @@
 Package.describe({
   name: 'ostrio:user-status',
-  version: '0.2.0',
+  version: '0.3.0',
   summary: 'Reactively check user\'s [on|off]line and idle status',
   git: 'https://github.com/VeliovGroup/Meteor-user-status',
   documentation: 'README.md'
