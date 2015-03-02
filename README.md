@@ -22,10 +22,11 @@ User =
   updatedAt: Date
   profile:
     location:
-      ip: String # --> Current or last used user's IP
+      ip: String    # --> Current or last used user's IP
     online: Boolean # --> Is user online
-    idle: Boolean # --> Is user online but idle
-  connection: String # --> Current or last used DDP Connection ID
+    idle: Boolean   # --> Is user online but idle
+    lastLogin: Date # --> Current or last login time
+  connection: String# --> Current or last used DDP Connection ID
 ```
 
 

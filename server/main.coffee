@@ -15,6 +15,7 @@ Meteor.startup ->
           'profile.online': true
           'profile.idle': false
           'profile.location.ip': attempt.connection.clientAddress
+          'profile.lastLogin': new Date()
 
     return if !attempt.error and attempt.user then true else false
 
