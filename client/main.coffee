@@ -40,12 +40,13 @@ Meteor.startup ->
           Meteor.clearTimeout UserStatus.timeoutID
           Session.set 'UserStatusIdle', false
 
-          Meteor.users.update
-            _id: Meteor.userId()
-          ,
-            '$set':
-              'profile.online': true
-              'profile.idle': false
+          if Meteor.user().profile.online isnt true or Meteor.user().profile.idle isnt false
+            Meteor.users.update
+              _id: Meteor.userId()
+            ,
+              '$set':
+                'profile.online': true
+                'profile.idle': false
 
           UserStatus.startTimer()
 
