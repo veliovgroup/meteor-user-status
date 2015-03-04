@@ -1,6 +1,6 @@
 Package.describe({
   name: 'ostrio:user-status',
-  version: '0.3.3',
+  version: '0.4.1',
   summary: 'Reactively check user\'s [on|off]line and idle status',
   git: 'https://github.com/VeliovGroup/Meteor-user-status',
   documentation: 'README.md'
@@ -11,5 +11,5 @@ Package.onUse(function(api) {
   api.addFiles('client/main.coffee', 'client');
   api.addFiles('server/main.coffee', 'server');
   api.use(['coffeescript', 'accounts-base', 'accounts-password', 'ostrio:jsextensions@0.0.4', 'sha'], ['client', 'server']);
-  api.use(['session', 'tracker'], 'client')
+  api.use(['session', 'tracker', 'reactive-var', 'underscore'], 'client')
 });

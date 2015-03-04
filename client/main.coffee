@@ -1,10 +1,11 @@
 Meteor.startup ->
   ###
-  @description Set default session values for token and userId
+  @description Set default session's and RectiveVar's values for token and userId
   ###
   Session.setDefault 'UserStatusIdle', false
-  Session.setDefault 'UserStatusToken', null
-  Session.setDefault 'UserStatusUserId', null
+  UserStatusToken = new ReactiveVar null
+  UserStatusUserId = new ReactiveVar null
+  UserStatusIsStarted = false
 
   ###
   @description Re-run condition each time Session's value is changed
@@ -14,25 +15,25 @@ Meteor.startup ->
     if UserStatus and _.has UserStatus, 'timeoutID'
       Meteor.clearTimeout UserStatus.timeoutID
 
-    # @description Store userId into "UserStatusUserId" Session and get token from server method
-    if Meteor.userId() and !Session.get 'UserStatusToken'
-      Session.set 'UserStatusUserId', Meteor.userId()
-      Meteor.call 'UserStatusGetToken', Session.get('UserStatusUserId'), (err, data) ->
+    # @description Store userId into "UserStatusUserId" ReactiveVar and get token from server method
+    if Meteor.userId() and !UserStatusToken.get()
+      UserStatusUserId.set Meteor.userId()
+      Meteor.call 'UserStatusGetToken', UserStatusUserId.get(), (err, data) ->
         throw new Meteor.Error 'Error on calling "UserStatusGetSecure"', err if err
-        Session.set 'UserStatusToken', data
+        UserStatusToken.set(data)
 
     # @description If we are already have userId and token, then update user status to 
-    else if Meteor.userId() and Session.get 'UserStatusToken'
-      Meteor.call 'UserStatusSet', Session.get('UserStatusUserId'), Session.get('UserStatusToken'), true, (err) ->
+    else if Meteor.userId() and UserStatusToken.get()
+      Meteor.call 'UserStatusSet', UserStatusUserId.get(), UserStatusToken.get(), true, (err) ->
         throw new Meteor.Error 'Error on calling "UserStatusSet"', err if err
 
     # @description If we are already have userId and token, but user isn't logged in, then update user status to 
-    else if !Meteor.userId() and Session.get('UserStatusUserId') and Session.get 'UserStatusToken'
-      Meteor.call 'UserStatusSet', Session.get('UserStatusUserId'), Session.get('UserStatusToken'), false, (err) ->
+    else if !Meteor.userId() and UserStatusUserId.get() and UserStatusToken.get()
+      Meteor.call 'UserStatusSet', UserStatusUserId.get(), UserStatusToken.get(), false, (err) ->
         throw new Meteor.Error 'Error on calling "UserStatusSet"', err if err
 
     # @description If user logged in only
-    if Meteor.userId()
+    if Meteor.userId() and !UserStatusIsStarted
       UserStatus = 
         hidden: {}
         timeoutID: ''
@@ -91,15 +92,16 @@ Meteor.startup ->
           UserStatus.goActive()
 
       # @description Set event listeners
-      @addEventListener "mousemove", UserStatus.goActive, false
-      @addEventListener "mousedown", UserStatus.goActive, false
-      @addEventListener "keypress", UserStatus.goActive, false
-      @addEventListener "DOMMouseScroll", UserStatus.goActive, false
-      @addEventListener "mousewheel", UserStatus.goActive, false
-      @addEventListener "touchmove", UserStatus.goActive, false
-      @addEventListener "MSPointerMove", UserStatus.goActive, false
-      @addEventListener "MSPointerMove", UserStatus.goActive, false
+      @addEventListener "mousemove", _.throttle(UserStatus.goActive, 777), false
+      @addEventListener "mousedown", _.throttle(UserStatus.goActive, 777), false
+      @addEventListener "keypress", _.throttle(UserStatus.goActive, 777), false
+      @addEventListener "DOMMouseScroll", _.throttle(UserStatus.goActive, 777), false
+      @addEventListener "mousewheel", _.throttle(UserStatus.goActive, 777), false
+      @addEventListener "touchmove", _.throttle(UserStatus.goActive, 777), false
+      @addEventListener "MSPointerMove", _.throttle(UserStatus.goActive, 777), false
+      @addEventListener "MSPointerMove", _.throttle(UserStatus.goActive, 777), false
       document.addEventListener UserStatus.hidden.evt, UserStatus.hidden.set, false
 
       # @description Start timer by default
       UserStatus.startTimer()
+      UserStatusIsStarted = true
