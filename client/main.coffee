@@ -39,30 +39,33 @@ Meteor.startup ->
         timeoutID: ''
         goActive: ->
           Meteor.clearTimeout UserStatus.timeoutID
-          Session.set 'UserStatusIdle', false
+          if Meteor.userId()
+            Session.set 'UserStatusIdle', false
 
-          if Meteor.user().profile.online isnt true or Meteor.user().profile.idle isnt false
+            if Meteor.user().profile.online isnt true or Meteor.user().profile.idle isnt false
+              Meteor.users.update
+                _id: Meteor.userId()
+              ,
+                '$set':
+                  'profile.online': true
+                  'profile.idle': false
+
+            UserStatus.startTimer()
+
+        goInactive: ->
+          if Meteor.userId()
+            Session.set 'UserStatusIdle', true
+
             Meteor.users.update
               _id: Meteor.userId()
             ,
               '$set':
                 'profile.online': true
-                'profile.idle': false
-
-          UserStatus.startTimer()
-
-        goInactive: ->
-          Session.set 'UserStatusIdle', true
-
-          Meteor.users.update
-            _id: Meteor.userId()
-          ,
-            '$set':
-              'profile.online': true
-              'profile.idle': true
+                'profile.idle': true
 
         startTimer: ->
-          UserStatus.timeoutID = Meteor.setTimeout UserStatus.goInactive, 60000
+          if Meteor.userId()
+            UserStatus.timeoutID = Meteor.setTimeout UserStatus.goInactive, 60000
 
       # @description Set right visibilitychange event and property names
       UserStatus.hidden.str = false
