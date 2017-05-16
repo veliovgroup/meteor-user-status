@@ -1,6 +1,6 @@
 Meteor user status
 ========
-Reactively setup user's [`on`|`off`]line and idle status into `Meteor.user().profile.online`, returns `Boolean` value.
+Reactively setup user's [`on`|`off`]line and idle status into `Meteor.user().profile.online`, returns `Boolean` value. __This package is meant to work only within `accounts-base` package, when users will login/logout.__
 
 Install:
 ========
@@ -16,9 +16,9 @@ import { UserStatus } from 'meteor/ostrio:user-status';
 
 Usage
 ========
-Simply add and use with `accounts-base` and `accounts-password` packages, `ostrio:user-status` will work just behind it on the background, - __doesn't requires any setting up__
+Simply add and use with `accounts-base` and `accounts-password` packages, `ostrio:user-status` will work silently behind it in the background, - __doesn't require any setting up__.
 
-RectiveVar `UserStatus.status` can be used to identify current user's status
+ReactiveVar `UserStatus.status` can be used to identify current user's status
 ```js
 import { UserStatus } from 'meteor/ostrio:user-status';
 UserStatus.status.get(); // One of offline, online, idle
@@ -54,57 +54,4 @@ Idle Status
 ========
 __Why idle?:__ Some apps require your constant attention. Such apps often include games, media players, anything that is CPU/battery intensive, and so on. For these kinds of apps, it may be important (as well as user-friendly) to do something when a user is no longer actively interacting with your app.
 
-To control idle status in current client use `Session.get('UserStatusIdle')`
-
-For example, let's redirect idle users to almost blank page, using `iron-router` package:
-Pause Template __(pause.jade)__
-```html
-<template name="pause">
-  <h1>You are on pause</h1>
-</template>
-```
-
-Create routes __(routes.coffee)__
-```js
-/*
- * Catch all routes
- */
-Router.onBeforeAction(function() {
-  Meteor.wrapAsync(function(route) {
-    if (!route.route.options.omitted) {
-      Session.set('prev_href', route.url);
-    }
-  });
-});
-
-
-/*
- * Example route map
- */
-Router.map(function() {
-  this.route('index', {
-    template: 'index',
-    path: '/'
-  });
-  this.route('pause', {
-    template: 'pause',
-    path: '/pause',
-    omitted: true
-  });
-});
-
-
-/*
- * Check wherever user is idle, redirect him to `/pause`, 
- * if user is active again redirect to previous URL
- */
-Tracker.autorun(function() {
-  if (Session.get('UserStatusIdle')) {
-    Session.set('UserStatusOnPause', true);
-    Router.go('/pause');
-  } else if (!Session.get('UserStatusIdle') && Session.get('UserStatusOnPause')) {
-    Session.set('UserStatusOnPause', false);
-    Router.go(Session.get('prev_href'));
-  }
-});
-```
+To control idle status for current client use - `Session.get('UserStatusIdle')`.
