@@ -1,5 +1,4 @@
-import { _ }           from 'meteor/underscore';
-import { $ }           from 'meteor/jquery';
+import throttle        from './throttle';
 import { Meteor }      from 'meteor/meteor';
 import { Session }     from 'meteor/session';
 import { Tracker }     from 'meteor/tracker';
@@ -62,8 +61,19 @@ class UserStatusClass {
     });
 
     /* @description Set event listeners */
-    $(document).on(this.hidden.evt, this.hidden.set);
-    $(window, document).on('mousemove mousedown keypress DOMMouseScroll mousewheel touchmove MSPointerMove MSPointerMove', _.throttle(this.goOnline.bind(this), 777));
+    this.on(document, [this.hidden.evt], this.hidden.set);
+    this.on(window, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], throttle(this.goOnline.bind(this), 777));
+    this.on(document, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], throttle(this.goOnline.bind(this), 777));
+  }
+
+  on(obj, events, fn) {
+    events.forEach((event) => {
+      if (obj.addEventListener) {
+        obj.addEventListener(event, fn, { passive: true, capture: false });
+      } else {
+        obj.attachEvent('on' + event, fn);
+      }
+    });
   }
 
   goOnline() {

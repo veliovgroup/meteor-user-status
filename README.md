@@ -55,3 +55,10 @@ Idle Status
 __Why idle?:__ Some apps require your constant attention. Such apps often include games, media players, anything that is CPU/battery intensive, and so on. For these kinds of apps, it may be important (as well as user-friendly) to do something when a user is no longer actively interacting with your app.
 
 To control idle status for current client use - `Session.get('UserStatusIdle')`.
+
+
+Support this project:
+========
+This project can't be possible without [ostr.io](https://ostr.io).
+
+By using [ostr.io](https://ostr.io) you are not only [protecting domain names](https://ostr.io/info/domain-names-protection), [monitoring websites and servers](https://ostr.io/info/monitoring), using [Prerendering for better SEO](https://ostr.io/info/prerendering) of your JavaScript website, but support our Open Source activity, and great packages like this one are available for free.
