@@ -1,19 +1,16 @@
-import throttle        from './throttle';
+import throttle        from '../lib/throttle.js';
 import { Meteor }      from 'meteor/meteor';
-import { Session }     from 'meteor/session';
-import { Tracker }     from 'meteor/tracker';
 import { Accounts }    from 'meteor/accounts-base';
 import { ReactiveVar } from 'meteor/reactive-var';
 
-const NoOp = function() {};
+const NoOp = function NoOp () {};
 
-class UserStatusClass {
+class UserStatus {
   constructor() {
-    Session.setDefault('UserStatusIdle', false);
-    this.status = new ReactiveVar('offline');
+    this.isRunning = false;
+    this.status = new ReactiveVar('online');
     this.hidden = {};
 
-    /* @description Set right visibilitychange event and property names */
     this.hidden.str = false;
     this.hidden.evt = void 0;
     if (typeof document.hidden !== 'undefined') {
@@ -34,7 +31,6 @@ class UserStatusClass {
       return document[this.hidden.str];
     };
 
-    /* @description Set active/inactive user status */
     this.hidden.set = () => {
       if (this.hidden.check()) {
         this.goIdle();
@@ -43,27 +39,8 @@ class UserStatusClass {
       }
     };
 
-    Tracker.autorun(() => {
-      const _user = Meteor.user();
-      if (_user) {
-        Session.set('UserStatusIdle', _user.profile.idle || false);
-        if (_user.profile.idle) {
-          this.status.set('idle');
-        } else if (_user.profile.online) {
-          this.status.set('online');
-        } else {
-          this.status.set('offline');
-        }
-      } else {
-        Session.set('UserStatusIdle', false);
-        this.status.set('offline');
-      }
-    });
-
-    /* @description Set event listeners */
-    this.on(document, [this.hidden.evt], this.hidden.set);
-    this.on(window, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], throttle(this.goOnline.bind(this), 777));
-    this.on(document, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], throttle(this.goOnline.bind(this), 777));
+    this.throttledGoOnline = throttle(this.goOnline.bind(this), 2048);
+    this.start();
   }
 
   on(obj, events, fn) {
@@ -76,58 +53,82 @@ class UserStatusClass {
     });
   }
 
+  off(obj, events, fn) {
+    events.forEach((event) => {
+      if (obj.removeEventListener) {
+        obj.removeEventListener(event, fn, { passive: true, capture: false });
+      } else {
+        obj.detachEvent('on' + event, fn);
+      }
+    });
+  }
+
   goOnline() {
-    const _user = Meteor.user();
-    if (_user && _user._id && (_user.profile.online !== true || _user.profile.idle !== false)) {
-      Meteor.users.update({
-        _id: _user._id
-      }, {
-        $set: {
-          'profile.online': true,
-          'profile.idle': false
-        }
-      }, NoOp);
+    const user = Meteor.user();
+    this.status.set('online');
+    if (user && user._id && user.profile && user.profile.status && (user.profile.status.online !== true || user.profile.status.idle !== false)) {
+      Meteor.call('UserStatusUpdate', true, false, NoOp);
     }
   }
 
   goIdle() {
-    const _user = Meteor.user();
-    if (_user && _user._id && (_user.profile.online !== true || _user.profile.idle !== true)) {
-      Meteor.users.update({
-        _id: _user._id
-      }, {
-        $set: {
-          'profile.online': true,
-          'profile.idle': true
-        }
-      }, NoOp);
+    const user = Meteor.user();
+    this.status.set('idle');
+    if (user && user._id && user.profile && user.profile.status && (user.profile.status.online !== true || user.profile.status.idle !== true)) {
+      Meteor.call('UserStatusUpdate', true, true, NoOp);
     }
   }
 
-  goOffline(_user = Meteor.user()) {
-    if (_user && _user._id && (_user.profile.online !== false || _user.profile.idle !== false)) {
-      Meteor.users.update({
-        _id: _user._id
-      }, {
-        $set: {
-          'profile.online': false,
-          'profile.idle': false
-        }
-      }, NoOp);
+  goOffline(user = Meteor.user()) {
+    this.status.set('offline');
+    if (user && user._id && user.profile && user.profile.status && (user.profile.status.online !== false || user.profile.status.idle !== false)) {
+      Meteor.call('UserStatusUpdate', false, false, NoOp);
     }
   }
 
   startTimer() {
-    Meteor.setInterval(this.goIdle.bind(this), 30000);
+    this.stopTimer();
+    this.timerId = Meteor.setInterval(this.goIdle.bind(this), 30000);
+  }
+
+  stopTimer() {
+    if (this.timerId) {
+      Meteor.clearInterval(this.timerId);
+      this.timerId = void 0;
+    }
   }
 
   start() {
-    this.startTimer();
+    if (this.isRunning === false) {
+      this.onLogin = Accounts.onLogin(this.goOnline.bind(this));
+      this.onLogout = Accounts.onLogout(this.goOffline.bind(this));
+
+      this.startTimer();
+      this.on(document, [this.hidden.evt], this.hidden.set);
+      this.on(window, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], this.throttledGoOnline);
+      this.on(document, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], this.throttledGoOnline);
+      this.isRunning = true;
+    }
+  }
+
+  stop() {
+    if (this.isRunning === true) {
+      if (this.onLogin) {
+        this.onLogin.stop();
+        this.onLogin = void 0;
+      }
+      if (this.onLogout) {
+        this.onLogout.stop();
+        this.onLogout = void 0;
+      }
+
+      this.stopTimer();
+      this.off(document, [this.hidden.evt], this.hidden.set);
+      this.off(window, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], this.throttledGoOnline);
+      this.off(document, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], this.throttledGoOnline);
+      this.isRunning = false;
+    }
   }
 }
-
-const UserStatus = new UserStatusClass();
-Accounts.onLogin(UserStatus.start.bind(UserStatus));
-Accounts.onLogout(UserStatus.goOffline.bind(UserStatus));
 
 export { UserStatus };
