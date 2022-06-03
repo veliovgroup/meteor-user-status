@@ -1,10 +1,14 @@
-# Meteor user-status
-
-<a href="https://www.patreon.com/bePatron?u=20396046">
-  <img src="https://c5.patreon.com/external/logo/become_a_patron_button@2x.png" width="160">
+[![support](https://img.shields.io/badge/support-GitHub-white)](https://github.com/sponsors/dr-dimitru)
+[![support](https://img.shields.io/badge/support-PayPal-white)](https://paypal.me/veliovgroup)
+<a href="https://ostr.io/info/built-by-developers-for-developers">
+  <img src="https://ostr.io/apple-touch-icon-60x60.png" height="20">
 </a>
 
-Reactively setup user's [`on`|`off`]line and idle status into `Meteor.user().profile.status.online`, returns `Boolean` value.
+# Meteor user-status
+
+Reactive user's online, offline, and idle status updates. Current user's status stored in `Meteor.user().profile.status.online`, returns `Boolean` value.
+
+- __Demo:__ [`meteor-user-status-demo`](https://github.com/veliovgroup/meteor-user-status-demo)
 
 ## Install:
 
@@ -18,16 +22,36 @@ meteor add ostrio:user-status
 import { UserStatus } from 'meteor/ostrio:user-status';
 ```
 
+## API
+
+`new UserStatus({opts})` constructor accepts couple of options:
+
+- `opts` {*Object*}
+- `opts.throttleTiming` {*Number*} — time in milliseconds between consecutive method calls; Default: `2048`
+- `opts.idleTimeout` {*Number*} — timeout in milliseconds to consider user status __idle__; Default: `30000`
+
+```js
+import { UserStatus } from 'meteor/ostrio:user-status';
+const userStatus = new UserStatus({ idleTimeout: 5000 });
+```
+
+- `userStatus.status` {*ReactiveVar*} — Returns *String*, one of: `offline`, `online`, or `idle`
+- `userStatus.stop()` {*Function*} — Stop tracking user's status
+- `userStatus.start()` {*Boolean*} — Start tracking user's status, *called upon constructor initialization*
+- `userStatus.isRunning` {*Boolean*}
+
 ## Usage
 
-Simply add and use with `accounts-base` packages, `ostrio:user-status` will work silently behind it in the background, - __doesn't require any setting up__.
+Use it as it is on the Client or with `accounts-*` packages. When used with *Accounts* — `ostrio:user-status` will update user's record in a MongoDB with its current status. Package work silently in the background and __doesn't require any setting up__, just initialize constructor.
 
-*ReactiveVar* `userStatus.status` can be used to identify current user's status
+Once initialized — use `userStatus.status` *ReactiveVar* to get current user's status in front end.
 
 ```js
 import { Meteor } from 'meteor/meteor';
 import { UserStatus } from 'meteor/ostrio:user-status';
 
+// INITIATE UserStatus ON CLIENT/BROWSER
+// TO BUILD FONT END LOGC AROUND online AND idle STATUSES
 if (Meteor.isClient) {
   const userStatus = new UserStatus();
 
@@ -42,6 +66,8 @@ if (Meteor.isClient) {
   userStatus.start();
 }
 
+// OPTIONALLY INITIATE UserStatus ON SERVER
+// THIS IS REQUIRED ONLY TO UPDATE USER'S OBJECT IN MONGODB
 if (Meteor.isServer) {
   // NOTE: WHEN INITIALIZED ON SERVER
   // LOGIN/LOGOUT HOOKS APPLIED TO ALL USERS
@@ -62,9 +88,8 @@ if (Meteor.isServer) {
 
 ```js
 {
-  username: String,   //-> Default `username` field
   connection: String, //-> Current or last used DDP Connection ID
-  profile:
+  profile: {
     status: {
       online: Boolean, //-> Is user online
       idle: Boolean,   //-> Is user online but idle
@@ -85,5 +110,6 @@ __Why track connection id?:__ Established DDP connection is user-less, to find r
 
 ## Support this project:
 
-- [Become a patron](https://www.patreon.com/bePatron?u=20396046) — support my open source contributions with monthly donation
+- [Sponsor veliovgroup via GitHub](https://github.com/sponsors/veliovgroup) — support company behind this package
+- [Support via PayPal](https://paypal.me/veliovgroup) — support our open source contributions
 - Use [ostr.io](https://ostr.io) — [Monitoring](https://snmp-monitoring.com), [Analytics](https://ostr.io/info/web-analytics), [WebSec](https://domain-protection.info), [Web-CRON](https://web-cron.info) and [Pre-rendering](https://prerendering.com) for a website
