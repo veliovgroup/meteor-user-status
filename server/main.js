@@ -1,13 +1,14 @@
-import { check }    from 'meteor/check';
-import { Meteor }   from 'meteor/meteor';
-import { Accounts } from 'meteor/accounts-base';
-
-const NoOp = function NoOp () {};
+import { check } from 'meteor/check';
+import { Meteor } from 'meteor/meteor';
+const noop = function noop () {};
+let _accounts;
 
 class UserStatus {
   constructor() {
+    _accounts = (Package && Package['accounts-base'] && Package['accounts-base'].Accounts) ? Package['accounts-base'].Accounts : undefined;
+
     Meteor.methods({
-      'UserStatusUpdate'(online, idle) {
+      'user-status.update'(online, idle) {
         check(online, Boolean);
         check(idle, Boolean);
 
@@ -16,8 +17,8 @@ class UserStatus {
         }
 
         const user = Meteor.users.findOne({ _id: this.userId });
-        if (user.profile.status.online !== online || user.profile.status.idle !== idle) {
-          Meteor.users.update({
+        if (user.profile.status?.online !== online || user.profile.status?.idle !== idle) {
+          Meteor.users?.update?.({
             _id: this.userId
           }, {
             $set: {
@@ -26,71 +27,91 @@ class UserStatus {
               'profile.status.idle': idle,
               'profile.status.lastSeen': new Date()
             }
-          }, NoOp);
+          }, noop);
         }
 
         return true;
       }
     });
+
     this.start();
   }
   start() {
-    this.onLogin = Accounts.onLogin((data) => {
-      Meteor.users.update({
-        _id: data.user._id
-      }, {
-        $set: {
-          connection: data.connection.id,
-          'profile.status.online': true,
-          'profile.status.idle': false,
-          'profile.status.lastLogin': new Date(),
-          'profile.status.lastSeen': new Date()
-        }
-      }, NoOp);
-    });
-
-    this.onLogout = Accounts.onLogout((data) => {
-      Meteor.users.update({
-        _id: data.user._id
-      }, {
-        $set: {
-          connection: data.connection.id,
-          'profile.status.online': false,
-          'profile.status.idle': false,
-          'profile.status.lastSeen': new Date()
-        }
-      }, NoOp);
-    });
-
-    this.onConnection = Meteor.onConnection((connection) => {
-      const connectionId = connection.id;
-
-      connection.onClose(() => {
-        Meteor.users.update({
-          connection: connectionId
+    if (_accounts) {
+      this.onLogin = _accounts.onLogin((data) => {
+        Meteor.users?.update?.({
+          _id: data.user._id
         }, {
           $set: {
-            'profile.status.online': false,
+            connection: data.connection.id,
+            'profile.status.online': true,
             'profile.status.idle': false,
+            'profile.status.lastLogin': new Date(),
             'profile.status.lastSeen': new Date()
           }
-        }, NoOp);
+        }, noop);
       });
-    });
+
+      this.onLogout = _accounts.onLogout((data) => {
+        if (data.user) {
+          Meteor.users?.update?.({
+            _id: data.user._id
+          }, {
+            $set: {
+              connection: data.connection.id,
+              'profile.status.online': false,
+              'profile.status.idle': false,
+              'profile.status.lastSeen': new Date()
+            }
+          }, noop);
+        } else if (data.connection?.id) {
+          Meteor.users?.update?.({
+            connection: data.connection.id
+          }, {
+            $set: {
+              'profile.status.online': false,
+              'profile.status.idle': false,
+              'profile.status.lastSeen': new Date()
+            }
+          }, noop);
+        }
+      });
+
+      this.onConnection = Meteor.onConnection((connection) => {
+        const connectionId = connection.id;
+
+        connection.onClose(() => {
+          Meteor.setTimeout(() => {
+            // USE TIMEOUT HERE TO AVOID SETTING idle STATUS
+            // WHICH IS CALLED ON SOME BROWSERS VIA visibility API
+            // UPON CLOSING BROWSER TAB OR WINDOW
+            Meteor.users?.update?.({
+              connection: connectionId
+            }, {
+              $set: {
+                'profile.status.online': false,
+                'profile.status.idle': false,
+                'profile.status.lastSeen': new Date()
+              }
+            }, noop);
+          }, 1024);
+        });
+      });
+    }
   }
 
   stop() {
     if (this.onLogin) {
       this.onLogin.stop();
-      this.onLogin = void 0;
+      delete this.onLogin;
     }
     if (this.onLogout) {
       this.onLogout.stop();
-      this.onLogout = void 0;
+      delete this.onLogout;
     }
     if (this.onConnection) {
       this.onConnection.stop();
-      this.onConnection = void 0;
+      delete this.onConnection;
     }
   }
 }

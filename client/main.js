@@ -1,12 +1,33 @@
-import throttle        from '../lib/throttle.js';
-import { Meteor }      from 'meteor/meteor';
-import { Accounts }    from 'meteor/accounts-base';
+import throttle from '../lib/throttle.js';
+import { Meteor } from 'meteor/meteor';
+import { Tracker } from 'meteor/tracker';
 import { ReactiveVar } from 'meteor/reactive-var';
+import { check, Match } from 'meteor/check';
 
-const NoOp = function NoOp () {};
+const noop = function noop () {};
+const DEFAULT_THROTTLE_TIMING = 2048;
+const DEFAULT_IDLE_TIMEOUT = 30000;
 
 class UserStatus {
-  constructor() {
+  constructor(opts) {
+    check(opts, Match.Optional({
+      throttleTiming: Match.Optional(Number),
+      idleTimeout: Match.Optional(Number)
+    }));
+
+    this.opts = opts || {
+      throttleTiming: DEFAULT_THROTTLE_TIMING,
+      idleTimeout: DEFAULT_IDLE_TIMEOUT
+    };
+
+    if (!this.opts.throttleTiming) {
+      this.opts.throttleTiming = DEFAULT_THROTTLE_TIMING;
+    }
+
+    if (!this.opts.idleTimeout) {
+      this.opts.idleTimeout = DEFAULT_IDLE_TIMEOUT;
+    }
+
     this.isRunning = false;
     this.status = new ReactiveVar('online');
     this.hidden = {};
@@ -33,13 +54,15 @@ class UserStatus {
 
     this.hidden.set = () => {
       if (this.hidden.check()) {
-        this.goIdle();
+        this.throttledGoIdle();
       } else {
-        this.goOnline();
+        this.throttledGoOnline();
       }
     };
 
-    this.throttledGoOnline = throttle(this.goOnline.bind(this), 2048);
+    this.throttledGoOnline = throttle(this.goOnline.bind(this), opts.throttleTiming);
+    this.throttledGoOffline = throttle(this.goOffline.bind(this), opts.throttleTiming);
+    this.throttledGoIdle = throttle(this.goIdle.bind(this), opts.throttleTiming);
     this.start();
   }
 
@@ -48,7 +71,7 @@ class UserStatus {
       if (obj.addEventListener) {
         obj.addEventListener(event, fn, { passive: true, capture: false });
       } else {
-        obj.attachEvent('on' + event, fn);
+        obj.attachEvent(`on${event}`, fn);
       }
     });
   }
@@ -58,55 +81,72 @@ class UserStatus {
       if (obj.removeEventListener) {
         obj.removeEventListener(event, fn, { passive: true, capture: false });
       } else {
-        obj.detachEvent('on' + event, fn);
+        obj.detachEvent(`on${event}`, fn);
       }
     });
   }
 
   goOnline() {
-    const user = Meteor.user();
     this.status.set('online');
-    if (user && user._id && user.profile && user.profile.status && (user.profile.status.online !== true || user.profile.status.idle !== false)) {
-      Meteor.call('UserStatusUpdate', true, false, NoOp);
+    this.stopTimer();
+    const user = Meteor.user?.();
+    if (user && (user.profile?.status?.online !== true || user.profile?.status?.idle !== false)) {
+      try {
+        Meteor.call('user-status.update', true, false, () => {
+          this.startTimer();
+        });
+      } catch (e) {
+        // -silently ignore errors, as the most probably UserStatus not initialized on a Server
+      }
+    } else {
+      this.startTimer();
     }
   }
 
   goIdle() {
-    const user = Meteor.user();
     this.status.set('idle');
-    if (user && user._id && user.profile && user.profile.status && (user.profile.status.online !== true || user.profile.status.idle !== true)) {
-      Meteor.call('UserStatusUpdate', true, true, NoOp);
+    this.stopTimer();
+    const user = Meteor.user?.();
+    if (user && user.profile?.status?.idle !== true) {
+      try {
+        Meteor.call('user-status.update', true, true, noop);
+      } catch (e) {
+        // -silently ignore errors, as the most probably UserStatus not initialized on a Server
+      }
     }
   }
 
-  goOffline(user = Meteor.user()) {
+  goOffline() {
     this.status.set('offline');
-    if (user && user._id && user.profile && user.profile.status && (user.profile.status.online !== false || user.profile.status.idle !== false)) {
-      Meteor.call('UserStatusUpdate', false, false, NoOp);
-    }
+    this.stopTimer();
   }
 
   startTimer() {
     this.stopTimer();
-    this.timerId = Meteor.setInterval(this.goIdle.bind(this), 30000);
+    this.timerId = Meteor.setInterval(this.throttledGoIdle.bind(this), this.opts.idleTimeout);
   }
 
   stopTimer() {
     if (this.timerId) {
       Meteor.clearInterval(this.timerId);
-      this.timerId = void 0;
+      delete this.timerId;
     }
   }
 
   start() {
     if (this.isRunning === false) {
-      this.onLogin = Accounts.onLogin(this.goOnline.bind(this));
-      this.onLogout = Accounts.onLogout(this.goOffline.bind(this));
+      this.tracker = Tracker.autorun(() => {
+        if (Meteor.status().connected === true) {
+          this.throttledGoOnline();
+        } else {
+          this.throttledGoOffline();
+        }
+      });
 
       this.startTimer();
       this.on(document, [this.hidden.evt], this.hidden.set);
-      this.on(window, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], this.throttledGoOnline);
-      this.on(document, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], this.throttledGoOnline);
+      this.on(window, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], this.throttledGoOnline.bind(this));
+      this.on(document, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], this.throttledGoOnline.bind(this));
       this.isRunning = true;
     }
   }
@@ -115,17 +155,21 @@ class UserStatus {
     if (this.isRunning === true) {
       if (this.onLogin) {
         this.onLogin.stop();
-        this.onLogin = void 0;
+        delete this.onLogin;
       }
       if (this.onLogout) {
         this.onLogout.stop();
-        this.onLogout = void 0;
+        delete this.onLogout;
+      }
+      if (this.tracker) {
+        this.tracker.stop();
+        delete this.tracker;
       }
 
       this.stopTimer();
       this.off(document, [this.hidden.evt], this.hidden.set);
-      this.off(window, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], this.throttledGoOnline);
-      this.off(document, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], this.throttledGoOnline);
+      this.off(window, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], this.throttledGoOnline.bind(this));
+      this.off(document, ['mousemove', 'mousedown', 'keypress', 'DOMMouseScroll', 'mousewheel', 'touchmove', 'MSPointerMove', 'MSPointerMove'], this.throttledGoOnline.bind(this));
       this.isRunning = false;
     }
   }
